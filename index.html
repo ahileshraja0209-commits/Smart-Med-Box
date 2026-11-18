@@ -1,6 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
+  <!-- GSAP 3 CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <!-- Three.js CDN (Fallback) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Google Fonts for Intro Display -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+
+  <style id="smb-exact-intro-styles">
+    /* ==========================================================================
+       CINEMATIC MEDICINE INTRO (EXACT MATCHING DESIGN)
+       Palette: Obsidian Black, Charcoal, Platinum, Emerald Green.
+       ========================================================================== */
+    #smb-intro-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000000;
+      z-index: 999999;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      color: #ffffff;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #smb-intro-overlay.smb-intro-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    /* Video Player */
+    #smb-intro-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      z-index: 2;
+      background: #000000;
+    }
+
+    /* WebGL Fallback Canvas */
+    #smb-intro-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      z-index: 1;
+    }
+
+    /* Top Left Brand Badge: [+] SMART MEDICINE BOX */
+    .smb-v-brand {
+      position: absolute;
+      top: 36px;
+      left: 44px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .smb-v-cross-box {
+      width: 22px;
+      height: 22px;
+      border: 1.5px solid rgba(255, 255, 255, 0.7);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .smb-v-cross-box svg {
+      width: 12px;
+      height: 12px;
+      stroke: #ffffff;
+      stroke-width: 2.2;
+    }
+    .smb-v-brand-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #ffffff;
+      opacity: 0.95;
+    }
+
+    /* Top Right Skip Button: SKIP INTRO ↗ */
+    .smb-v-skip-btn {
+      position: absolute;
+      top: 32px;
+      right: 44px;
+      z-index: 30;
+      background: rgba(18, 20, 24, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      padding: 9px 20px;
+      border-radius: 9999px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      outline: none;
+    }
+    .smb-v-skip-btn:hover {
+      background: rgba(30, 35, 42, 0.9);
+      border-color: rgba(255, 255, 255, 0.6);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+    }
+    .smb-v-skip-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      transition: transform 0.2s ease;
+    }
+    .smb-v-skip-btn:hover svg {
+      transform: translate(2px, -2px);
+    }
+
+    /* Bottom Progress Bar */
+    .smb-v-progress-track {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      z-index: 25;
+    }
+    .smb-v-progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #34d399, #ffffff);
+      transition: width 0.1s linear;
+    }
+
+    /* Transition Flash Dissolve */
+    .smb-transition-flash {
+      position: absolute;
+      inset: 0;
+      background: #0a0b0d;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 50;
+      transition: opacity 0.5s ease;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .smb-v-brand {
+        top: 20px;
+        left: 20px;
+      }
+      .smb-v-brand-title {
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+      }
+      .smb-v-skip-btn {
+        top: 18px;
+        right: 20px;
+        padding: 7px 14px;
+        font-size: 0.7rem;
+      }
+    }
+  </style>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Smart Medicine Box | IoT Medical Reminder System</title>
@@ -1107,6 +1296,46 @@
   </style>
 </head>
 <body>
+
+  <!-- ======================================================================
+       CINEMATIC MEDICINE INTRO OVERLAY (EXACT VIDEO + 3D BACKUP)
+       ====================================================================== -->
+  <div id="smb-intro-overlay" role="dialog" aria-modal="true" aria-label="Smart Medicine Box Introduction">
+    <!-- Full-Screen High-Definition Video Player -->
+    <video id="smb-intro-video" src="intro.mp4" autoplay muted playsinline preload="auto"></video>
+
+    <!-- WebGL Fallback Canvas -->
+    <canvas id="smb-intro-canvas"></canvas>
+
+    <!-- Top Left Brand Badge: [+] SMART MEDICINE BOX -->
+    <div class="smb-v-brand">
+      <span class="smb-v-cross-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </span>
+      <span class="smb-v-brand-title">SMART MEDICINE BOX</span>
+    </div>
+
+    <!-- Top Right Skip Button: SKIP INTRO ↗ -->
+    <button class="smb-v-skip-btn" id="smbSkipBtn" title="Skip Intro (or press ESC)">
+      <span>SKIP INTRO</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <line x1="7" y1="17" x2="17" y2="7"></line>
+        <polyline points="7 7 17 7 17 17"></polyline>
+      </svg>
+    </button>
+
+    <!-- Bottom Progress Track -->
+    <div class="smb-v-progress-track">
+      <div class="smb-v-progress-bar" id="smbProgressBar"></div>
+    </div>
+
+    <!-- Transition Flash Overlay -->
+    <div class="smb-transition-flash" id="smbTransitionFlash"></div>
+  </div>
+
 
   <div class="app-container">
 
@@ -2987,5 +3216,137 @@
     // Initialize Firebase on load
     initFirebase();
   </script>
+
+  <!-- ======================================================================
+       CINEMATIC INTRO CONTROLLER & SMOOTH HOMEPAGE TRANSITION
+       ====================================================================== -->
+  <script>
+    (function() {
+      const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const overlay = document.getElementById('smb-intro-overlay');
+      const video = document.getElementById('smb-intro-video');
+      const canvas = document.getElementById('smb-intro-canvas');
+      const skipBtn = document.getElementById('smbSkipBtn');
+      const progressBar = document.getElementById('smbProgressBar');
+      const flash = document.getElementById('smbTransitionFlash');
+
+      let isEnded = false;
+      let animFrame = null;
+
+      function finishIntro(instant = false) {
+        if (isEnded) return;
+        isEnded = true;
+
+        if (video) {
+          try { video.pause(); } catch(e) {}
+        }
+
+        if (instant || prefersReducedMotion) {
+          overlay.style.display = 'none';
+          overlay.classList.add('smb-intro-hidden');
+          return;
+        }
+
+        // Smooth cinematic crossfade into the website
+        flash.style.opacity = '1';
+        setTimeout(() => {
+          overlay.style.opacity = '0';
+          setTimeout(() => {
+            overlay.classList.add('smb-intro-hidden');
+            overlay.style.display = 'none';
+          }, 800);
+        }, 300);
+      }
+
+      // Skip on click or ESC key
+      if (skipBtn) skipBtn.addEventListener('click', () => finishIntro(false));
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !isEnded) finishIntro(false);
+      });
+
+      if (prefersReducedMotion) {
+        finishIntro(true);
+        return;
+      }
+
+      // Configure and play video
+      if (video) {
+        // Start after first frame
+        video.currentTime = 0.18;
+
+        video.addEventListener('timeupdate', () => {
+          if (!video.duration) return;
+          const pct = (video.currentTime / video.duration) * 100;
+          if (progressBar) progressBar.style.width = pct + '%';
+
+          // When the video reaches the white/dissolve transition (approx 16.2s - 16.5s)
+          if (video.currentTime >= 16.2 && !isEnded) {
+            finishIntro(false);
+          }
+        });
+
+        video.addEventListener('ended', () => {
+          finishIntro(false);
+        });
+
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            // If browser autoplay policy requires user interaction, keep muted and retry or fallback
+            video.muted = true;
+            video.play().catch(() => {
+              startThreeJsFallback();
+            });
+          });
+        }
+
+        video.addEventListener('error', () => {
+          startThreeJsFallback();
+        });
+      } else {
+        startThreeJsFallback();
+      }
+
+      // Three.js Fallback if video is unavailable
+      function startThreeJsFallback() {
+        if (!canvas || typeof THREE === 'undefined') {
+          setTimeout(() => finishIntro(false), 2000);
+          return;
+        }
+        canvas.style.display = 'block';
+        if (video) video.style.display = 'none';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050608);
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 10);
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        const light = new THREE.DirectionalLight(0xffffff, 2);
+        light.position.set(5, 10, 7);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x1a202c, 1.5));
+
+        const geo = new THREE.CylinderGeometry(0.8, 0.8, 2.0, 32);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x10b981, metalness: 0.8, roughness: 0.2 });
+        const pill = new THREE.Mesh(geo, mat);
+        scene.add(pill);
+
+        function loop() {
+          if (isEnded) return;
+          animFrame = requestAnimationFrame(loop);
+          pill.rotation.y += 0.02;
+          pill.rotation.x += 0.01;
+          renderer.render(scene, camera);
+        }
+        loop();
+
+        setTimeout(() => finishIntro(false), 6000);
+      }
+
+    })();
+  </script>
+
 </body>
 </html>
