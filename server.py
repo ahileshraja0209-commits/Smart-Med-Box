@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -9,17 +10,34 @@ SECRETS_PATH = os.path.join(BASE_DIR, "medbox_secrets.env")
 PORT = int(os.environ.get("MEDBOX_PORT", "5500"))
 
 
-def read_local_gemini_key() -> str:
-    env_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if env_key:
-        return env_key
+def read_local_secret(key_name: str) -> str:
+    env_val = os.environ.get(key_name, "").strip()
+    if env_val:
+        return env_val
     if os.path.exists(SECRETS_PATH):
         with open(SECRETS_PATH, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line.startswith("GEMINI_API_KEY="):
+                if line.startswith(f"{key_name}="):
                     return line.split("=", 1)[1].strip()
     return ""
+
+
+def read_local_gemini_key() -> str:
+    return read_local_secret("GEMINI_API_KEY")
+
+
+def send_telegram_message(text: str):
+    token = read_local_secret("TELEGRAM_BOT_TOKEN")
+    chat_id = read_local_secret("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        raise ValueError("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured in medbox_secrets.env")
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = json.dumps({"chat_id": chat_id, "text": text}).encode("utf-8")
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
 
 def escape_cpp_string(value: str) -> str:
@@ -117,6 +135,20 @@ class MedBoxHandler(SimpleHTTPRequestHandler):
                     return
                 result = write_wifi_to_esp_ino(ssid, password)
                 self._send_json(200, result)
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "error": str(exc)})
+            return
+        if self.path == "/api/send-telegram":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length) if length > 0 else b"{}"
+                data = json.loads(raw.decode("utf-8"))
+                text = str(data.get("text", "")).strip()
+                if not text:
+                    self._send_json(400, {"ok": False, "error": "Message text is required."})
+                    return
+                res = send_telegram_message(text)
+                self._send_json(200, {"ok": True, "result": res})
             except Exception as exc:
                 self._send_json(500, {"ok": False, "error": str(exc)})
             return
