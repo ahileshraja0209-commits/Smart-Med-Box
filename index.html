@@ -3706,6 +3706,21 @@
       playMedicalChime('dose');
       showToast(`TIME FOR MEDICATION: Take ${med.dosage || '1 tablet'} of ${med.name}`, "warn");
 
+      // Also send Telegram dose reminder via local server if available
+      const tgMsg = `ITS TIME TO TAKE YOUR DOSE OF MEDICATION\nMedicine: ${med.name}\nDosage: ${med.dosage || '1 tablet'}\nTime: ${med.reminderTime || '--:--'}\nSlot: ${med.slot || 'Box'}`;
+      (async () => {
+        for (const url of ["/api/send-telegram", "http://localhost:5500/api/send-telegram"]) {
+          try {
+            const r = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: tgMsg })
+            });
+            if (r.ok) break;
+          } catch (_) {}
+        }
+      })();
+
       // Browser System Notification
       if ("Notification" in window && Notification.permission === "granted") {
         try {
