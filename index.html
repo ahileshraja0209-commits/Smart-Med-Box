@@ -4154,13 +4154,6 @@
           return;
         }
 
-        if (!apiKey) {
-          statusText.textContent = "Gemini API key not set yet";
-          showRxAlert("Paste your Gemini API key above and click 'Save Key', then click 'Re-analyze with AI' — or enter medicines manually below.", "error");
-          if (medListEl.children.length === 0) renderReviewRows([{}]);
-          return;
-        }
-
         statusText.innerHTML = `<span class="spinner" style="width:14px;height:14px;margin-right:6px;"></span> Reading prescription & calculating tablets...`;
         reanalyzeBtn.disabled = true;
 
@@ -4249,17 +4242,11 @@ Return ONLY a valid JSON array (no markdown, no explanation) with objects having
         }
 
         try {
-          const candidateModels = ["gemini-3.8-flash", "gemini-3.8-pro", "gemini-3.0-flash", "gemini-2.5-pro", "gemini-2.0-flash"];
+          let candidateModels = apiKey ? ["gemini-3.8-flash", "gemini-3.8-pro"] : [];
           let data = null;
-          let lastError = null;
+          let lastError = apiKey ? null : new Error("Local server (medbox_server.py) is not running on port 5500.");
 
-          for (let i = 0; i < candidateModels.length; i++) {
-            const modelName = candidateModels[i];
-            if (i > 0) {
-              statusText.innerHTML = `<span class="spinner" style="width:14px;height:14px;margin-right:6px;"></span> Trying backup model (${modelName})...`;
-              await new Promise((r) => setTimeout(r, 500));
-            }
-
+          async function tryGeminiModel(modelName) {
             const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -4273,35 +4260,83 @@ Return ONLY a valid JSON array (no markdown, no explanation) with objects having
                 generationConfig: { temperature: 0.1 }
               })
             });
-
             const json = await resp.json();
-            if (resp.ok) {
-              data = json;
+            if (resp.ok) return { ok: true, json };
+            return { ok: false, status: resp.status, errMsg: json?.error?.message || `API error ${resp.status}` };
+          }
+
+          for (let i = 0; i < candidateModels.length; i++) {
+            const modelName = candidateModels[i];
+            if (i > 0) {
+              statusText.innerHTML = `<span class="spinner" style="width:14px;height:14px;margin-right:6px;"></span> Trying backup model (${modelName})...`;
+              await new Promise((r) => setTimeout(r, 400));
+            }
+            const res = await tryGeminiModel(modelName);
+            if (res.ok) {
+              data = res.json;
               break;
             }
+            lastError = new Error(res.errMsg);
+          }
 
-            const errMsg = json?.error?.message || `API error ${resp.status}`;
-            lastError = new Error(errMsg);
-            const isTransient = resp.status === 503 || resp.status === 429 || resp.status === 404 || /high demand|overloaded|unavailable|not found|no longer available/i.test(errMsg);
-            if (!isTransient) {
-              throw lastError;
-            }
+          // If initial models failed, discover available models dynamically for this API key
+          if (!data && apiKey) {
+            try {
+              const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+              if (listResp.ok) {
+                const listJson = await listResp.json();
+                const dynamicModels = (listJson.models || [])
+                  .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+                  .map((m) => String(m.name || "").replace(/^models\//, ""))
+                  .filter((name) => /gemini/i.test(name) && !/embedding|tts|imagen|veo/i.test(name) && !candidateModels.includes(name))
+                  .slice(0, 4);
+
+                for (const modelName of dynamicModels) {
+                  statusText.innerHTML = `<span class="spinner" style="width:14px;height:14px;margin-right:6px;"></span> Trying available model (${modelName})...`;
+                  const res = await tryGeminiModel(modelName);
+                  if (res.ok) {
+                    data = res.json;
+                    break;
+                  }
+                  lastError = new Error(res.errMsg);
+                }
+              }
+            } catch (_) {}
           }
 
           if (!data) {
             statusText.innerHTML = `<span class="spinner" style="width:14px;height:14px;margin-right:6px;"></span> Gemini busy — running local OCR scanner...`;
             const Tesseract = await loadTesseractScript();
             const ocrResult = await Tesseract.recognize(`data:${capturedMimeType};base64,${capturedBase64}`, "eng");
-            const localMeds = parsePrescriptionTextLocally(ocrResult?.data?.text || "");
+            const rawOcrText = ocrResult?.data?.text || "";
+            let localMeds = parsePrescriptionTextLocally(rawOcrText);
+
+            if (localMeds.length === 0) {
+              const fallbackLines = rawOcrText
+                .split(/\r?\n/)
+                .map((l) => l.trim())
+                .filter((l) => l.length >= 4 && /[a-zA-Z]{3,}/.test(l))
+                .slice(0, 6);
+              if (fallbackLines.length > 0) {
+                localMeds = fallbackLines.map((line) => ({
+                  name: line,
+                  totalTablets: 5,
+                  courseDays: 5,
+                  reminderTime: "09:00",
+                  notes: line,
+                  category: "regular"
+                }));
+              }
+            }
 
             if (localMeds.length > 0) {
               renderReviewRows(localMeds);
-              statusText.textContent = `Local OCR detected ${localMeds.length} medicine(s) — Please verify & edit`;
-              showRxAlert("Gemini AI is currently experiencing high demand, so local OCR was used. Please check and edit the names/tablet counts below.", "success");
-              showToast(`Local OCR extracted ${localMeds.length} medicine(s)!`, "success");
+              statusText.textContent = `Local OCR detected ${localMeds.length} line(s) — Please verify & edit`;
+              showRxAlert("Gemini AI is currently busy, so local OCR extracted these lines. Please verify and edit the medicine names & tablet counts below.", "success");
+              showToast(`Local OCR extracted ${localMeds.length} item(s)!`, "success");
               return;
             }
-            throw lastError || new Error("Gemini AI is busy and local OCR could not read text clearly.");
+            throw new Error("Gemini AI is currently busy and local OCR could not detect readable text. Please enter medicines manually below.");
           }
 
           const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
