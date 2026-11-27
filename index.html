@@ -3706,6 +3706,31 @@
       playMedicalChime('dose');
       showToast(`TIME FOR MEDICATION: Take ${med.dosage || '1 tablet'} of ${med.name}`, "warn");
 
+      // Trigger ESP32 OLED + LED + Buzzer + Servo directly over LAN
+      if (espConfig && espConfig.ip) {
+        (async () => {
+          try {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), 3000);
+            await fetch(`http://${espConfig.ip}/trigger-dose`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: controller.signal,
+              mode: "cors",
+              body: JSON.stringify({
+                id: med.id || "",
+                name: med.name || "Medicine",
+                dosage: med.dosage || "1 tablet",
+                reminderTime: med.reminderTime || "",
+                quantity: Number(med.quantity) || 1
+              })
+            });
+          } catch (e) {
+            console.warn("Direct ESP32 dose trigger failed:", e.message);
+          }
+        })();
+      }
+
       // Also send Telegram dose reminder via local server if available
       const tgMsg = `ITS TIME TO TAKE YOUR DOSE OF MEDICATION\nMedicine: ${med.name}\nDosage: ${med.dosage || '1 tablet'}\nTime: ${med.reminderTime || '--:--'}\nSlot: ${med.slot || 'Box'}`;
       (async () => {
@@ -4756,7 +4781,7 @@ Return ONLY a valid JSON array (no markdown, no explanation) with objects having
 
           try {
             const device = await navigator.bluetooth.requestDevice({
-              filters: [{ name: "SmartMedBox-BLE" }],
+              filters: [{ name: "SmartMedBox-BLE" }, { services: [BLE_SERVICE_UUID] }],
               optionalServices: [BLE_SERVICE_UUID]
             });
 
@@ -4775,7 +4800,11 @@ Return ONLY a valid JSON array (no markdown, no explanation) with objects having
             statusEl.textContent = "Sent via Bluetooth! ESP32 is rebooting and connecting to " + ssid + ".";
             showToast("Wi-Fi sent to ESP32 via Bluetooth!", "success");
           } catch (err) {
-            if (err && err.name === "NotFoundError") return;
+            if (err && err.name === "NotFoundError") {
+              statusEl.style.color = "var(--text-muted)";
+              statusEl.textContent = "No SmartMedBox-BLE selected. (BLE only advertises when ESP32 is offline / not connected to Wi-Fi.)";
+              return;
+            }
             console.error("BLE WiFi send error:", err);
             statusEl.style.color = "var(--status-coral)";
             statusEl.textContent = "Bluetooth failed: " + (err.message || "Connection error");
